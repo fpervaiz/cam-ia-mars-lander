@@ -12,37 +12,96 @@
 // to receive any suggested modifications by private correspondence to
 // ahg@eng.cam.ac.uk and gc121@eng.cam.ac.uk.
 
+#include <vector>
 #include "lander.h"
 
-void autopilot (void)
-  // Autopilot to adjust the engine throttle, parachute and attitude control
+void autopilot(void)
+// Autopilot to adjust the engine throttle, parachute and attitude control
 {
-  // INSERT YOUR CODE HERE
+	// INSERT YOUR CODE HERE
+
+	double altitude = position.abs() - MARS_RADIUS;
+
 	// Deploy parachute when appropriate
-	if (parachute_status == NOT_DEPLOYED && safe_to_deploy_parachute() && (position.abs() - MARS_RADIUS) < 50000.0) {
+	if (parachute_status == NOT_DEPLOYED && safe_to_deploy_parachute() && altitude < 50000.0) {
 		parachute_status = DEPLOYED;
 	}
 
-	// Orientation in opposite direction to velocity
 	// De-orbit burn if periapsis outside atmosphere and attitude stabilisation enabled
-	if (periapsis > 80000.0) {
-		//double angle = acos((position*velocity) / (position.abs()*velocity.abs())) * (180 / M_PI);
-		//orientation = vector3d(0.0, 0.0, -180 + angle);
+	// Burn at or near apoapsis for better fuel usage
+	bool near_apoapsis;
+	if (abs(altitude - apoapsis) < apoapsis / 20) {
+		near_apoapsis = true;
+	}
+	else {
+		near_apoapsis = false;
+	}
+	if (periapsis > 80000.0 && near_apoapsis) {
 		stabilized_attitude = true;
 		throttle = 1;
-		//if ((int)simulation_time % 10 == 0) { cout << angle << endl; }
 		return;
 	}
 
-	double Kh = 0.01;
-	double Kp = 0.5;
-	double delta = 0.5;
+	double Kh;
+	double Kp;
+	
+	switch (scenario) {
 
-	static vector3d radial = vector3d(1.0, 1.0, 1.0);
-	radial = radial.norm();
-	double sink_rate = -velocity * radial;
-	double error = -(0.5 + Kh * (position.abs() - MARS_RADIUS) + sink_rate);
+	case 0: // Working - 68.1 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+
+	case 1: // Working - 60.6 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+
+	case 2: // Working - 67.3 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+
+	case 3: // Working - 84.1 litres consumption
+		Kh = 0.02;
+		Kp = 0.05;
+		break;
+
+	case 4: // Working - 66.0 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+
+	case 5: // Working - 81.9 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+
+	case 6: // Working - 94.8 litres consumption
+		Kh = 0.02;
+		Kp = 0.5;
+		break;
+	}
+	
+	static vector<double> a_list, v_list;
+	static bool data_written = false;
+
+	double sink_rate = velocity * position.norm();
+	double error = -(0.5 + Kh * altitude + sink_rate);
 	double Pout = Kp * error;
+
+	double lander_mass = UNLOADED_LANDER_MASS + FUEL_DENSITY * fuel * FUEL_CAPACITY;
+	double lander_weight = GRAVITY * MARS_MASS * lander_mass / position.abs2();
+	double density = atmospheric_density(position);
+	double lander_drag_force = (0.5) * density * DRAG_COEF_LANDER * 3.14159*LANDER_SIZE*LANDER_SIZE * velocity.abs2() * (velocity.norm() * position.norm());
+	double delta = (lander_weight - lander_drag_force) / MAX_THRUST; // delta equals resultant downward force on lander as proportion of max thrust
+
+	if (delta > 1) {
+		delta = 1;
+	}
+	else if (delta < 0) {
+		delta = 0;
+	}
 
 	stabilized_attitude = true;
 
@@ -56,13 +115,25 @@ void autopilot (void)
 		throttle = 1;
 	}
 
+	a_list.push_back(altitude);
+	v_list.push_back(sink_rate);
+
+	if ((altitude < 1) && !(data_written)) {
+		ofstream fout;
+		fout.open("profile.txt");
+		for (int i = 0; i < a_list.size(); i = i + 1) {
+			fout << a_list[i] << ' ' << v_list[i] << endl;
+		}
+		data_written = true;
+	}
+	
 }
 
-void numerical_dynamics (void)
-  // This is the function that performs the numerical integration to update the
-  // lander's pose. The time step is delta_t (global variable).
+void numerical_dynamics(void)
+// This is the function that performs the numerical integration to update the
+// lander's pose. The time step is delta_t (global variable).
 {
-  // INSERT YOUR CODE HERE
+	// INSERT YOUR CODE HERE
 	vector3d rocket_thrust_force, lander_drag_force, chute_drag_force, gravity_force, resultant_force, acceleration, new_position;
 	static vector3d previous_position;
 	double density, lander_mass;
@@ -80,7 +151,7 @@ void numerical_dynamics (void)
 	else {
 		chute_drag_force = vector3d(0.0, 0.0, 0.0);
 	}
-	gravity_force = ((-GRAVITY*MARS_MASS*lander_mass) / position.abs2())*position.norm();
+	gravity_force = ((-GRAVITY * MARS_MASS*lander_mass) / position.abs2())*position.norm();
 
 	resultant_force = rocket_thrust_force + lander_drag_force + chute_drag_force + gravity_force;
 
@@ -105,7 +176,7 @@ void numerical_dynamics (void)
 	vector3d node = vector3d(0, 0, 1) ^ h;
 	double mu = GRAVITY * MARS_MASS;
 	static int counter = 0;
-	
+
 	vector3d eccentricity = (1 / mu)*((velocity.abs2() - (mu / position.abs()))*position - (position*velocity)*velocity);
 	double e = eccentricity.abs();
 	double spec_mech_energy = velocity.abs2() / 2 - mu / position.abs();
@@ -113,122 +184,122 @@ void numerical_dynamics (void)
 	periapsis = ((1 - e)*a) - MARS_RADIUS;
 	apoapsis = ((1 + e)*a) - MARS_RADIUS;
 
-  // Here we can apply an autopilot to adjust the thrust, parachute and attitude
-  if (autopilot_enabled) autopilot();
+	// Here we can apply an autopilot to adjust the thrust, parachute and attitude
+	if (autopilot_enabled) autopilot();
 
-  // Here we can apply 3-axis stabilization to ensure the base is always pointing downwards
-  if (stabilized_attitude) attitude_stabilization();
+	// Here we can apply 3-axis stabilization to ensure the base is always pointing downwards
+	if (stabilized_attitude) attitude_stabilization();
 }
 
-void initialize_simulation (void)
-  // Lander pose initialization - selects one of 10 possible scenarios
+void initialize_simulation(void)
+// Lander pose initialization - selects one of 10 possible scenarios
 {
-  // The parameters to set are:
-  // position - in Cartesian planetary coordinate system (m)
-  // velocity - in Cartesian planetary coordinate system (m/s)
-  // orientation - in lander coordinate system (xyz Euler angles, degrees)
-  // delta_t - the simulation time step
-  // boolean state variables - parachute_status, stabilized_attitude, autopilot_enabled
-  // scenario_description - a descriptive string for the help screen
+	// The parameters to set are:
+	// position - in Cartesian planetary coordinate system (m)
+	// velocity - in Cartesian planetary coordinate system (m/s)
+	// orientation - in lander coordinate system (xyz Euler angles, degrees)
+	// delta_t - the simulation time step
+	// boolean state variables - parachute_status, stabilized_attitude, autopilot_enabled
+	// scenario_description - a descriptive string for the help screen
 
-  scenario_description[0] = "circular orbit";
-  scenario_description[1] = "descent from 10km";
-  scenario_description[2] = "elliptical orbit, thrust changes orbital plane";
-  scenario_description[3] = "polar launch at escape velocity (but drag prevents escape)";
-  scenario_description[4] = "elliptical orbit that clips the atmosphere and decays";
-  scenario_description[5] = "descent from 200km";
-  scenario_description[6] = "areostationary circular orbit";
-  scenario_description[7] = "";
-  scenario_description[8] = "";
-  scenario_description[9] = "";
+	scenario_description[0] = "circular orbit";
+	scenario_description[1] = "descent from 10km";
+	scenario_description[2] = "elliptical orbit, thrust changes orbital plane";
+	scenario_description[3] = "polar launch at escape velocity (but drag prevents escape)";
+	scenario_description[4] = "elliptical orbit that clips the atmosphere and decays";
+	scenario_description[5] = "descent from 200km";
+	scenario_description[6] = "areostationary circular orbit";
+	scenario_description[7] = "";
+	scenario_description[8] = "";
+	scenario_description[9] = "";
 
-  switch (scenario) {
+	switch (scenario) {
 
-  case 0:
-    // a circular equatorial orbit
-    position = vector3d(1.2*MARS_RADIUS, 0.0, 0.0);
-    velocity = vector3d(0.0, -3247.087385863725, 0.0);
-    orientation = vector3d(0.0, 90.0, 0.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = false;
-    autopilot_enabled = false;
-    break;
+	case 0:
+		// a circular equatorial orbit
+		position = vector3d(1.2*MARS_RADIUS, 0.0, 0.0);
+		velocity = vector3d(0.0, -3247.087385863725, 0.0);
+		orientation = vector3d(0.0, 90.0, 0.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = false;
+		autopilot_enabled = false;
+		break;
 
-  case 1:
-    // a descent from rest at 10km altitude
-    position = vector3d(0.0, -(MARS_RADIUS + 10000.0), 0.0);
-    velocity = vector3d(0.0, 0.0, 0.0);
-    orientation = vector3d(0.0, 0.0, 90.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = true;
-    autopilot_enabled = false;
-    break;
+	case 1:
+		// a descent from rest at 10km altitude
+		position = vector3d(0.0, -(MARS_RADIUS + 10000.0), 0.0);
+		velocity = vector3d(0.0, 0.0, 0.0);
+		orientation = vector3d(0.0, 0.0, 90.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = true;
+		autopilot_enabled = false;
+		break;
 
-  case 2:
-    // an elliptical polar orbit
-    position = vector3d(0.0, 0.0, 1.2*MARS_RADIUS);
-    velocity = vector3d(3500.0, 0.0, 0.0);
-    orientation = vector3d(0.0, 0.0, 90.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = false;
-    autopilot_enabled = false;
-    break;
+	case 2:
+		// an elliptical polar orbit
+		position = vector3d(0.0, 0.0, 1.2*MARS_RADIUS);
+		velocity = vector3d(3500.0, 0.0, 0.0);
+		orientation = vector3d(0.0, 0.0, 90.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = false;
+		autopilot_enabled = false;
+		break;
 
-  case 3:
-    // polar surface launch at escape velocity (but drag prevents escape)
-    position = vector3d(0.0, 0.0, MARS_RADIUS + LANDER_SIZE/2.0);
-    velocity = vector3d(0.0, 0.0, 5027.0);
-    orientation = vector3d(0.0, 0.0, 0.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = false;
-    autopilot_enabled = false;
-    break;
+	case 3:
+		// polar surface launch at escape velocity (but drag prevents escape)
+		position = vector3d(0.0, 0.0, MARS_RADIUS + LANDER_SIZE / 2.0);
+		velocity = vector3d(0.0, 0.0, 5027.0);
+		orientation = vector3d(0.0, 0.0, 0.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = false;
+		autopilot_enabled = false;
+		break;
 
-  case 4:
-    // an elliptical orbit that clips the atmosphere each time round, losing energy
-    position = vector3d(0.0, 0.0, MARS_RADIUS + 100000.0);
-    velocity = vector3d(4000.0, 0.0, 0.0);
-    orientation = vector3d(0.0, 90.0, 0.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = false;
-    autopilot_enabled = false;
-    break;
+	case 4:
+		// an elliptical orbit that clips the atmosphere each time round, losing energy
+		position = vector3d(0.0, 0.0, MARS_RADIUS + 100000.0);
+		velocity = vector3d(4000.0, 0.0, 0.0);
+		orientation = vector3d(0.0, 90.0, 0.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = false;
+		autopilot_enabled = false;
+		break;
 
-  case 5:
-    // a descent from rest at the edge of the exosphere
-    position = vector3d(0.0, -(MARS_RADIUS + EXOSPHERE), 0.0);
-    velocity = vector3d(0.0, 0.0, 0.0);
-    orientation = vector3d(0.0, 0.0, 90.0);
-    delta_t = 0.1;
-    parachute_status = NOT_DEPLOYED;
-    stabilized_attitude = true;
-    autopilot_enabled = false;
-    break;
+	case 5:
+		// a descent from rest at the edge of the exosphere
+		position = vector3d(0.0, -(MARS_RADIUS + EXOSPHERE), 0.0);
+		velocity = vector3d(0.0, 0.0, 0.0);
+		orientation = vector3d(0.0, 0.0, 90.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = true;
+		autopilot_enabled = false;
+		break;
 
-  case 6:
-	// areostationary circular orbit
-	position = vector3d((MARS_RADIUS + AREOSTATIONARY_ALTITUDE), 0.0, 0.0);
-	velocity = vector3d(0.0, sqrt((GRAVITY*MARS_MASS) / (MARS_RADIUS + AREOSTATIONARY_ALTITUDE)), 0.0);
-	orientation = vector3d(0.0, 90.0, 0.0);
-	delta_t = 0.1;
-	parachute_status = NOT_DEPLOYED;
-	stabilized_attitude = false;
-	autopilot_enabled = false;
-    break;
+	case 6:
+		// areostationary circular orbit
+		position = vector3d((MARS_RADIUS + AREOSTATIONARY_ALTITUDE), 0.0, 0.0);
+		velocity = vector3d(0.0, sqrt((GRAVITY*MARS_MASS) / (MARS_RADIUS + AREOSTATIONARY_ALTITUDE)), 0.0);
+		orientation = vector3d(0.0, 90.0, 0.0);
+		delta_t = 0.1;
+		parachute_status = NOT_DEPLOYED;
+		stabilized_attitude = false;
+		autopilot_enabled = false;
+		break;
 
-  case 7:
-    break;
+	case 7:
+		break;
 
-  case 8:
-    break;
+	case 8:
+		break;
 
-  case 9:
-    break;
+	case 9:
+		break;
 
-  }
+	}
 }
