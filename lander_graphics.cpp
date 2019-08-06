@@ -743,10 +743,14 @@ void draw_instrument_window(void)
 	glut_print(view_width + GAP + 240, INSTRUMENT_HEIGHT - 157, s.str());
 	s.str(""); s << "periapsis " << fixed << periapsis << " m";
 	glut_print(view_width + GAP + 380, INSTRUMENT_HEIGHT - 157, s.str());
+	s.str(""); s << "wind at pos " << fixed << wind_at_pos << " m/s";
+	glut_print(view_width + GAP + 240, INSTRUMENT_HEIGHT - 177, s.str());
+	s.str(""); s << "wind at surface " << fixed << wind_at_surface << " m/s";
+	glut_print(view_width + GAP + 380, INSTRUMENT_HEIGHT - 177, s.str());
 
 	// Draw thrust bar
 	s.str(""); s << "Thrust " << fixed << thrust_wrt_world().abs() << " N";
-	draw_control_bar(view_width + GAP + 240, INSTRUMENT_HEIGHT - 170, throttle, 1.0, 0.0, 0.0, s.str());
+	draw_control_bar(view_width + GAP + 240, INSTRUMENT_HEIGHT - 190, throttle, 1.0, 0.0, 0.0, s.str());
 
 	// Draw fuel bar
 	s.str(""); s << "Fuel " << fixed << fuel * FUEL_CAPACITY << " litres";
@@ -1716,7 +1720,7 @@ void reset_simulation(void)
 	stabilized_attitude_angle = 0;
 	throttle = 0.0;
 	fuel = 1.0;
-
+	
 	// Restore initial lander state
 	initialize_simulation();
 
@@ -1729,6 +1733,8 @@ void reset_simulation(void)
 		landed = true;
 		velocity = vector3d(0.0, 0.0, 0.0);
 	}
+
+	steady_start_time = 0, gust_start_time = 0;
 
 	// Visualisation routine's record of various speeds and velocities
 	velocity_from_positions = velocity;
