@@ -74,8 +74,8 @@
 #define FUEL_DENSITY 1.0 // (kg/l)
 // MAX_THRUST, as defined below, is 1.5 * weight of fully loaded lander at surface
 #define MAX_THRUST (1.5 * (FUEL_DENSITY*FUEL_CAPACITY+UNLOADED_LANDER_MASS) * (GRAVITY*MARS_MASS/(MARS_RADIUS*MARS_RADIUS))) // (N)
-#define ENGINE_LAG 0.1 // (s)
-#define ENGINE_DELAY 0.1 // (s)
+#define ENGINE_LAG 0.0 // (s)
+#define ENGINE_DELAY 0.0 // (s)
 #define DRAG_COEF_CHUTE 2.0
 #define DRAG_COEF_LANDER 1.0
 #define MAX_PARACHUTE_DRAG 20000.0 // (N)
@@ -168,8 +168,8 @@ unsigned long long time_program_started;
 // Lander state - the visualization routines use velocity_from_positions, so not sensitive to 
 // any errors in the velocity update in numerical_dynamics
 vector3d position, orientation, velocity, velocity_from_positions, last_position;
-double climb_speed, ground_speed, altitude, throttle, fuel, apoapsis, periapsis, Kh, Kp;
-bool stabilized_attitude, autopilot_enabled, parachute_lost;
+double climb_speed, ground_speed, altitude, throttle, fuel, apoapsis, periapsis, wind_at_pos, wind_at_surface, steady_start_time, gust_start_time, Kh, Kp;
+bool stabilized_attitude, autopilot_enabled, parachute_lost, wind_enabled;
 parachute_status_t parachute_status;
 int stabilized_attitude_angle;
 
@@ -186,8 +186,8 @@ GLfloat straight_on[] = { 0.0, 0.0, 1.0, 0.0 };
 
 #else // extern declarations of those global variables used in lander.cpp
 
-extern bool stabilized_attitude, autopilot_enabled;
-extern double delta_t, simulation_time, throttle, fuel, apoapsis, periapsis, Kh, Kp;
+extern bool stabilized_attitude, autopilot_enabled, wind_enabled;
+extern double delta_t, simulation_time, throttle, fuel, apoapsis, periapsis, wind_at_pos, wind_at_surface, steady_start_time, gust_start_time, Kh, Kp;
 extern unsigned short scenario;
 extern string scenario_description[];
 extern vector3d position, orientation, velocity;

@@ -1734,7 +1734,7 @@ void reset_simulation(void)
 		velocity = vector3d(0.0, 0.0, 0.0);
 	}
 
-	steady_start_time = 0, gust_start_time = 0;
+	if (wind_enabled) steady_start_time = 0, gust_start_time = 0;
 
 	// Visualisation routine's record of various speeds and velocities
 	velocity_from_positions = velocity;

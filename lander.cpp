@@ -13,6 +13,7 @@
 // ahg@eng.cam.ac.uk and gc121@eng.cam.ac.uk.
 
 #include <vector>
+#include <time.h>
 #include "lander.h"
 
 void autopilot(void)
@@ -48,8 +49,8 @@ void autopilot(void)
 	switch (scenario) {
 
 	case 0: // Working - 68.1 litres consumption (0.02, 0.5)
-		Kh = 0.1686;
-		Kp = 4.7237;
+		Kh = 0.02;
+		Kp = 0.5;
 		break;
 
 	case 1: // Working - 60.6 litres consumption
@@ -140,48 +141,50 @@ void numerical_dynamics(void)
 	static bool gusting = false, steady = false;
 	static double steady_duration, gust_duration;
 	
-	if (!gusting && !steady) {
-		if (rand() % 6 == 0) {
-			// Gusting 1 in 6 times (arbitrary)
-			surface_wind = vector3d(rand() % 40 - 20, rand() % 40 - 20, rand() % 40 - 20);
-			gust_duration = rand() % 4 + 5;
-			gust_start_time = simulation_time;
-			gusting = true;
+	if (wind_enabled) {
+		if (!gusting && !steady) {
+			if (rand() % 6 == 0) {
+				// Gusting 1 in 6 times (arbitrary)
+				surface_wind = vector3d(rand() % 40 - 20, rand() % 40 - 20, rand() % 40 - 20);
+				gust_duration = rand() % 4 + 5;
+				gust_start_time = simulation_time;
+				gusting = true;
+			}
+			else {
+				// Steady
+				surface_wind = vector3d(rand() % 12 - 6, rand() % 12 - 6, rand() % 12 - 6);
+				steady_duration = rand() % 120 + 15;
+				steady_start_time = simulation_time;
+				steady = true;
+			}
+		}
+
+		// Reset steady/gusting when duration elapsed
+		if (gusting && simulation_time > gust_start_time + gust_duration) {
+			gusting = false;
+		}
+		else if (steady && simulation_time > steady_start_time + steady_duration) {
+			steady = false;
+		}
+
+		// Wind strengh variation with altitude (peak 3x)
+		// Roughly based on https://www.researchgate.net/profile/Alexey_Pankine/publication/252307634/figure/fig3/AS:298062665797634@1448075085348/Mars-atmospheric-wind-profile.png
+		double altitude = position.abs() - MARS_RADIUS;
+		if (altitude < 16000) {
+			wind = surface_wind * (1 + altitude / 6400);
+		}
+		else if (altitude >= 16000 && altitude < 36000) {
+			wind = surface_wind * (12 - altitude / 6000);
 		}
 		else {
-			// Steady
-			surface_wind = vector3d(rand() % 12 - 6, rand() % 12 - 6, rand() % 12 - 6);
-			steady_duration = rand() % 120 + 15;
-			steady_start_time = simulation_time;
-			steady = true;
+			wind = surface_wind * 0;
 		}
-	}
-	
-	// Reset steady/gusting when duration elapsed
-	if (gusting && simulation_time > gust_start_time + gust_duration) {
-		gusting = false;
-	}
-	else if (steady && simulation_time > steady_start_time + steady_duration) {
-		steady = false;
-	}
 
-	// Wind strengh variation with altitude (peak 3x)
-	// Roughly based on https://www.researchgate.net/profile/Alexey_Pankine/publication/252307634/figure/fig3/AS:298062665797634@1448075085348/Mars-atmospheric-wind-profile.png
-	double altitude = position.abs() - MARS_RADIUS;
-	if (altitude < 16000) {
-		wind = surface_wind * (1 + altitude / 6400);
-	}
-	else if (altitude >= 16000 && altitude < 36000) {
-		wind = surface_wind * (12 - altitude / 6000);
-	}
-	else {
-		wind = surface_wind * 0;
-	}
-	
-	wind_at_pos = wind.abs();
-	wind_at_surface = surface_wind.abs();
+		wind_at_pos = wind.abs();
+		wind_at_surface = surface_wind.abs();
 
-	velocity = velocity - wind;
+		velocity = velocity - wind;
+	}
 
 	vector3d rocket_thrust_force, lander_drag_force, chute_drag_force, gravity_force, resultant_force, acceleration, new_position;
 	static vector3d previous_position;
@@ -243,7 +246,7 @@ void numerical_dynamics(void)
 void initialize_simulation(void)
 // Lander pose initialization - selects one of 10 possible scenarios
 {
-	srand(simulation_time);
+	srand(time(NULL));
 	
 	// The parameters to set are:
 	// position - in Cartesian planetary coordinate system (m)
@@ -275,6 +278,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = false;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 1:
@@ -286,6 +290,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = true;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 2:
@@ -297,6 +302,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = false;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 3:
@@ -308,6 +314,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = false;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 4:
@@ -319,6 +326,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = false;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 5:
@@ -330,6 +338,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = true;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 6:
@@ -341,6 +350,7 @@ void initialize_simulation(void)
 		parachute_status = NOT_DEPLOYED;
 		stabilized_attitude = false;
 		autopilot_enabled = false;
+		wind_enabled = true;
 		break;
 
 	case 7:

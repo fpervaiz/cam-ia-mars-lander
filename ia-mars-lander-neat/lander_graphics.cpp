@@ -572,6 +572,8 @@ void reset_simulation(void)
 		velocity = vector3d(0.0, 0.0, 0.0);
 	}
 
+	if (wind_enabled) steady_start_time = 0, gust_start_time = 0;
+
 	// Visualisation routine's record of various speeds and velocities
 	velocity_from_positions = velocity;
 	last_position = position - delta_t * velocity_from_positions;
@@ -617,7 +619,7 @@ int main(int argc, char* argv[])
 	else {
 		readable = false;
 	}
-
+	wind_enabled = true;
 	// Initialise the simulation state
 	scenario = atoi(argv[1]);
 	Kh = atof(argv[2]);
